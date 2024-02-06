@@ -45,6 +45,18 @@ section .text
 
         call funcaoHanoi                 ; Chama a função rhanoi
 
+        ; Converte instrucoes_executadas para string
+        mov eax, [instrucoes_executadas]
+        lea ebx, [num_buffer]           ; Endereço do buffer para armazenar a string convertida
+        call itoa                       ; Chama a função itoa para converter o número para string
+
+        ; Imprime a mensagem final
+        mov eax, 4                          ; syscall para imprimir
+        mov ebx, 1                          ; file descriptor (stdout)
+        mov ecx, mensagem_final       ; ponteiro para a mensagem final
+        mov edx, len_mensagem_final         ; tamanho da mensagem final em bytes
+        int 0x80                            ; chama o kernel para imprimir
+
         ; FIM DO PROGRAMA
         mov eax, 1                      ; Saida do sistema
         mov ebx, 0                      ; saida padrão  
@@ -105,6 +117,8 @@ _atoi:
         push dword [ebp+12]             ; coloca na pilha o pino de origem
         push dword [ebp+8]              ; coloca na pilha o pino de o numero de disco inicial
         call imprime                    ; Chama a função 'imprime'
+        inc dword [instrucoes_executadas]        ; Incrementa o contador de instruções
+
         
         ;PASSO3 - RECURSIVIDADE
         add esp,12                      ; libera mais 12 bits de espaço (20 - 8) Último e primeiro parâmetro
@@ -128,9 +142,19 @@ _atoi:
         push ebp                      ; empurra o registrador ebp na pilha (para ser a base)
         mov ebp, esp                  ; aponta o ponteiro do topo da pilha (esp) para a base
         
-        mov eax, [ebp + 8]            ; coloca no registrador ax o disco a ser movido
-        add al, 48                    ; conversao na tabela ASCII
-        mov [disco], al               ; coloca o valor no [disco] para o print
+
+        mov eax, [ebp + 8]         ; Coloca o número a ser convertido em eax
+        lea ebx, [num_buffer]      ; Endereço do buffer para armazenar a string convertida
+        call itoa                  ; Chama a função itoa para converter o número para string
+        lea edi, [disco ]      ; Endereço de destino (disco), pulando os dois espaços iniciais
+        mov esi, ebx               ; Endereço de origem (buffer)
+        
+        ; Copia a string convertida diretamente para disco, começando após os dois espaços
+        mov ecx, num_length        ; Tamanho da string convertida
+        rep movsb                  ; Copia a string de esi para edi
+
+
+
 
         mov eax, [ebp + 12]           ; coloca no registrador ax a torre de onde o disco saiu
         add al, 64                    ; conversao na tabela ASCII
@@ -139,6 +163,8 @@ _atoi:
         mov eax, [ebp + 16]           ; coloca no registrador ax a torre de onde o disco foi
         add al, 64                    ; conversao na tabela ASCII
         mov [pino_origem], al           ; coloca o valor no [torre_ida] para o print
+
+
 
         mov edx, lenght               ; tamanho da mensagem
         mov ecx, msg                  ; mensagem em si
@@ -149,6 +175,29 @@ _atoi:
         mov     esp, ebp              ; aponta o ponteiro da base da pilha (ebp) para o topo
         pop     ebp                   ; tira o elemento do topo da pilha e guarda o valor em ebp
         ret                           ; retira o ultimo valor do topo da pilha e da um jump para ele (a linha de retorno nesse caso)
+itoa:
+    ; Entradas:
+    ; eax: número a ser convertido
+    ; ebx: endereço do buffer para armazenar a string convertida
+
+    cmp eax, 0      ; Verifica se o número é zero
+    jne convert_loop ; Se não for zero, pula para o loop de conversão
+    ; Caso seja zero, coloca '0' no buffer e termina
+    mov byte [ebx], '0'
+    mov byte [ebx + 1], 0
+    ret
+
+convert_loop:
+    mov     ecx, 10            ; Divisor (base decimal)
+    xor     edx, edx           ; Limpa edx para a divisão
+    div     ecx                ; Divide eax por 10, resultado em eax, resto em edx
+    add     dl, '0'            ; Converte o resto para caractere ASCII
+    dec     ebx                ; Move o ponteiro para o buffer para a próxima posição
+    mov     [ebx], dl          ; Armazena o caractere convertido no buffer
+    test eax, eax               ; Verifica se eax (quociente) é zero
+    jnz  convert_loop          ; Se não for zero, continua o loop
+
+    ret
 
 
 ;__DECLARAÇÃO DE VARIÁVEIS INICIALIZADAS;
@@ -157,10 +206,10 @@ section .data
     menu db 'DIGITE A QUANTIDADE DE DISCOS: ' ,0xa      ; mensagem do menu que aparecerá ao rodar a aplicação
     len equ $-menu                                      ; tamanho da mensagem do menu armazenado em na variável 'len'
 
-    ; FORMATAÃ‡ÃƒO DE SAÃ DA
+    ; formatação da mensagem
     msg:
                           db        "disc: "   
-        disco:            db        " "
+        disco:            db        "  "
                           db        "   "                      
         pino_destino:      db        " "  
                           db        " -> "     
@@ -168,9 +217,16 @@ section .data
         
         lenght            equ       $-msg
 
+    mensagem_final db 'Número de movimentos:   ', 0xa    ; mensagem final
+    len_mensagem_final equ $-mensagem_final             ; tamanho da mensagem final
+    num_length equ 10                  ; tamanho máximo da string convertida
+
+    num_buffer resb 10                ; buffer para armazenar a string convertida do número
 
 
 ;__DECLARAÇÃO DE VARIÁVEIS NÃO INICIALIZADAS;
 section .bss
 
     disk resb 5                 ; Armazenamento de dados não inicializado
+    
+    instrucoes_executadas resd 1       ; Variável para contar as instruções executadas
